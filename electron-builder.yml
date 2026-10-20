@@ -1,0 +1,21 @@
+appId: com.nazca.indumentaria
+productName: NAZCA
+directories:
+  output: release
+files:
+  - out/**/*
+  - node_modules/**/*
+  - package.json
+asar: false
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
