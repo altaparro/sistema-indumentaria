@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { hashPassword, verifyPassword } from './db.js'
+import { crearSincronizador } from './metaCatalog.js'
 
 const SESIONES = new Map()
 const DURACION_SESION_MS = 12 * 60 * 60 * 1000
@@ -223,6 +224,10 @@ export function createServer({ db, staticDir, imagenesDir }) {
   const app = express()
   const dirImagenes = imagenesDir || path.join(os.tmpdir(), 'sistema-indumentaria-imagenes')
   fs.mkdirSync(dirImagenes, { recursive: true })
+  const whatsapp = crearSincronizador({ db, dirImagenes })
+  setTimeout(() => {
+    whatsapp.procesarCola().catch((err) => console.error('[whatsapp] cola inicial:', err))
+  }, 5000)
   app.use('/imagenes', express.static(dirImagenes))
   app.use(express.json({ limit: '10mb' }))
 
@@ -384,6 +389,7 @@ export function createServer({ db, staticDir, imagenesDir }) {
           Number(b.precio_compra || 0),
           b.imagen || null
         )
+      whatsapp.encolar(Number(info.lastInsertRowid), 'CREATE')
       res.status(201).json(db.prepare('SELECT * FROM productos WHERE id = ?').get(info.lastInsertRowid))
     } catch (err) {
       respuestaError(res, err, 500)
@@ -395,7 +401,7 @@ export function createServer({ db, staticDir, imagenesDir }) {
       const b = req.body || {}
       if (!b.id) return res.status(400).json({ error: 'Falta el ID del producto' })
       const anterior = db.prepare('SELECT imagen FROM productos WHERE id = ?').get(b.id)
-      db.prepare(
+      const info = db.prepare(
         `UPDATE productos SET nombre = ?, codigo = ?, marca = ?, tipo_producto_id = ?, proveedor_id = ?, talle = ?, color = ?, stock = ?, precio_venta = ?, precio_compra = ?, imagen = ?
          WHERE id = ?`
       ).run(
@@ -416,6 +422,12 @@ export function createServer({ db, staticDir, imagenesDir }) {
       if (anterior?.imagen && anterior.imagen !== imagenNueva) {
         borrarImagenSubida(dirImagenes, anterior.imagen)
       }
+      if (anterior && anterior.imagen !== imagenNueva) {
+        db.prepare('UPDATE productos SET imagen_url_publica = NULL WHERE id = ?').run(b.id)
+      }
+      if (info.changes > 0) {
+        whatsapp.encolar(Number(b.id), 'UPDATE')
+      }
       res.json(db.prepare('SELECT * FROM productos WHERE id = ?').get(b.id))
     } catch (err) {
       respuestaError(res, err, 500)
@@ -424,7 +436,8 @@ export function createServer({ db, staticDir, imagenesDir }) {
 
   app.delete('/api/productos', requerido, (req, res) => {
     const id = Number(req.query.id)
-    const producto = db.prepare('SELECT imagen FROM productos WHERE id = ?').get(id)
+    const producto = db.prepare('SELECT imagen, wa_sincronizado FROM productos WHERE id = ?').get(id)
+    if (producto) whatsapp.encolar(id, 'DELETE')
     db.prepare('DELETE FROM productos WHERE id = ?').run(id)
     if (producto?.imagen) borrarImagenSubida(dirImagenes, producto.imagen)
     res.json({ ok: true })
@@ -656,6 +669,50 @@ export function createServer({ db, staticDir, imagenesDir }) {
       ventasMes: ventasMes.c,
       totalMes: ventasMes.total
     })
+  })
+
+  // Sincronización con catálogo de WhatsApp (Meta)
+  app.get('/api/whatsapp/config', requerido, (_req, res) => {
+    res.json(whatsapp.obtenerConfig())
+  })
+
+  app.put('/api/whatsapp/config', requerido, (req, res) => {
+    const b = req.body || {}
+    whatsapp.setSetting('wa_token', String(b.token ?? '').trim())
+    whatsapp.setSetting('wa_catalog_id', String(b.catalog_id ?? '').trim())
+    whatsapp.setSetting('wa_imgbb_key', String(b.imgbb_key ?? '').trim())
+    whatsapp.setSetting('wa_sync_auto', b.sync_auto ? '1' : '0')
+    res.json(whatsapp.obtenerConfig())
+  })
+
+  app.post('/api/whatsapp/test', requerido, async (req, res) => {
+    try {
+      const cfg = whatsapp.obtenerConfig()
+      const token = String(req.body?.token ?? '').trim() || cfg.token
+      const catalogId = String(req.body?.catalog_id ?? '').trim() || cfg.catalog_id
+      const catalogo = await whatsapp.probarConexion(token, catalogId)
+      res.json({ ok: true, catalogo })
+    } catch (err) {
+      res.status(400).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/whatsapp/status', requerido, (_req, res) => {
+    res.json(whatsapp.estadoCola())
+  })
+
+  app.post('/api/whatsapp/sync-all', requerido, (_req, res) => {
+    try {
+      const encolados = whatsapp.sincronizarTodo()
+      res.json({ ok: true, encolados })
+    } catch (err) {
+      res.status(400).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/whatsapp/retry', requerido, (_req, res) => {
+    const reintentados = whatsapp.reintentarErrores()
+    res.json({ ok: true, reintentados })
   })
 
   // Settings

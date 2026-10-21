@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS productos (
   precio_venta REAL NOT NULL DEFAULT 0,
   precio_compra REAL NOT NULL DEFAULT 0,
   imagen TEXT,
+  imagen_url_publica TEXT,
+  wa_sincronizado INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS productos_marca_idx ON productos(marca);
@@ -96,6 +98,18 @@ CREATE TABLE IF NOT EXISTS settings (
   clave TEXT PRIMARY KEY,
   valor TEXT
 );
+
+CREATE TABLE IF NOT EXISTS sync_cola (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  producto_id INTEGER NOT NULL,
+  accion TEXT NOT NULL CHECK (accion IN ('CREATE','UPDATE','DELETE')),
+  estado TEXT NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','listo','error')),
+  intentos INTEGER NOT NULL DEFAULT 0,
+  ultimo_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS sync_cola_estado_idx ON sync_cola(estado);
 `
 
 const TIPOS_INICIALES = [
@@ -139,6 +153,14 @@ export function initDb(dbPath) {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.exec(ESQUEMA)
+
+  const columnas = db.prepare('PRAGMA table_info(productos)').all().map((c) => c.name)
+  if (!columnas.includes('imagen_url_publica')) {
+    db.exec('ALTER TABLE productos ADD COLUMN imagen_url_publica TEXT')
+  }
+  if (!columnas.includes('wa_sincronizado')) {
+    db.exec('ALTER TABLE productos ADD COLUMN wa_sincronizado INTEGER NOT NULL DEFAULT 0')
+  }
 
   const seed = db.transaction(() => {
     const tipos = db.prepare('SELECT COUNT(*) AS c FROM tipo_producto').get().c
