@@ -62,13 +62,18 @@ function normalizarDoc(numero) {
 
 // ---------- Lógica de ventas ----------
 
-function registrarVenta(db, { medio_pago_id, cliente_id, items }) {
+function registrarVenta(db, { medio_pago_id, cliente_id, items, descuento_pct }) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('La venta debe tener al menos un producto')
   }
 
   const medio = db.prepare('SELECT * FROM medio_pago WHERE id = ?').get(medio_pago_id)
   if (!medio) throw new Error('Medio de pago inválido')
+
+  const descuento = Number(descuento_pct ?? 0)
+  if (!Number.isFinite(descuento) || descuento < 0 || descuento > 100) {
+    throw new Error('El descuento debe ser un porcentaje entre 0 y 100')
+  }
 
   if (cliente_id != null && !db.prepare('SELECT id FROM clientes WHERE id = ?').get(cliente_id)) {
     throw new Error('Cliente inválido')
@@ -96,14 +101,17 @@ function registrarVenta(db, { medio_pago_id, cliente_id, items }) {
   }
 
   const interes = Number(medio.interes) || 0
-  const total = Math.round(totalBase * (1 + interes / 100) * 100) / 100
+  const montoDescuento = Math.round((totalBase * descuento) / 100 * 100) / 100
+  const baseDescuento = totalBase - montoDescuento
+  const montoInteres = Math.round((baseDescuento * interes) / 100 * 100) / 100
+  const total = Math.round((baseDescuento + montoInteres) * 100) / 100
 
   const ejecutar = db.transaction(() => {
     const info = db
       .prepare(
-        'INSERT INTO ventas (medio_pago_id, cliente_id, total_base, interes_pct, total) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO ventas (medio_pago_id, cliente_id, total_base, descuento_pct, interes_pct, total) VALUES (?, ?, ?, ?, ?, ?)'
       )
-      .run(medio_pago_id, cliente_id ?? null, totalBase, interes, total)
+      .run(medio_pago_id, cliente_id ?? null, totalBase, descuento, interes, total)
 
     const ventaId = info.lastInsertRowid
     const insertarDetalle = db.prepare(
@@ -135,10 +143,17 @@ function registrarVenta(db, { medio_pago_id, cliente_id, items }) {
 
   const ventaId = ejecutar()
 
-  return { venta_id: ventaId, total_base: totalBase, interes_pct: interes, total }
+  return {
+    venta_id: ventaId,
+    total_base: totalBase,
+    descuento_pct: descuento,
+    monto_descuento: montoDescuento,
+    interes_pct: interes,
+    total
+  }
 }
 
-function editarVenta(db, { venta_id, medio_pago_id, cliente_id, items }) {
+function editarVenta(db, { venta_id, medio_pago_id, cliente_id, items, descuento_pct }) {
   const ejecutar = db.transaction(() => {
     const venta = db.prepare('SELECT id FROM ventas WHERE id = ?').get(venta_id)
     if (!venta) throw new Error('La venta no existe')
@@ -151,7 +166,7 @@ function editarVenta(db, { venta_id, medio_pago_id, cliente_id, items }) {
 
     db.prepare('DELETE FROM ventas WHERE id = ?').run(venta_id)
 
-    return registrarVenta(db, { medio_pago_id, cliente_id, items })
+    return registrarVenta(db, { medio_pago_id, cliente_id, items, descuento_pct })
   })
 
   return ejecutar()
@@ -607,7 +622,8 @@ export function createServer({ db, staticDir, imagenesDir }) {
           venta_id: ventaId,
           medio_pago_id: medioPagoId,
           cliente_id: clienteId,
-          items: b.items
+          items: b.items,
+          descuento_pct: b.descuento_pct
         })
         return res.json(data)
       }
@@ -615,7 +631,8 @@ export function createServer({ db, staticDir, imagenesDir }) {
       const data = registrarVenta(db, {
         medio_pago_id: medioPagoId,
         cliente_id: clienteId,
-        items: b.items
+        items: b.items,
+        descuento_pct: b.descuento_pct
       })
       res.status(201).json(data)
     } catch (err) {

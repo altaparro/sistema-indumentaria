@@ -40,8 +40,8 @@ export default function Inicio() {
   return (
     <div className="min-h-screen bg-crema-100">
       <div className="mx-auto max-w-6xl px-4 py-10">
+        <Nav />
         <header className="mb-8">
-          <Nav />
           <div className="flex items-center gap-3">
             <img
               src="/logo.png"

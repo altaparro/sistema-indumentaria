@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS ventas (
   medio_pago_id INTEGER REFERENCES medio_pago(id) ON DELETE SET NULL,
   cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
   total_base REAL NOT NULL DEFAULT 0,
+  descuento_pct REAL NOT NULL DEFAULT 0,
   interes_pct REAL NOT NULL DEFAULT 0,
   total REAL NOT NULL DEFAULT 0
 );
@@ -160,6 +161,11 @@ export function initDb(dbPath) {
   }
   if (!columnas.includes('wa_sincronizado')) {
     db.exec('ALTER TABLE productos ADD COLUMN wa_sincronizado INTEGER NOT NULL DEFAULT 0')
+  }
+
+  const columnasVentas = db.prepare('PRAGMA table_info(ventas)').all().map((c) => c.name)
+  if (!columnasVentas.includes('descuento_pct')) {
+    db.exec('ALTER TABLE ventas ADD COLUMN descuento_pct REAL NOT NULL DEFAULT 0')
   }
 
   const seed = db.transaction(() => {

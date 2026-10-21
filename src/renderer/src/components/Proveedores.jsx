@@ -123,8 +123,8 @@ function ContenidoProveedores() {
   return (
     <div className="min-h-screen bg-crema-100">
       <div className="mx-auto max-w-6xl px-4 py-10">
+        <Nav />
         <header className="mb-8">
-          <Nav />
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Proveedores</h1>
             <p className="text-sm text-slate-500">Administrá tus proveedores</p>

@@ -15,7 +15,8 @@ export default function Nav() {
   const { usuario, logout } = useAuth()
 
   return (
-    <nav className="mb-8 flex w-fit flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+    <div className="sticky top-0 z-40 -mx-4 mb-8 bg-crema-100/95 px-4 py-2 backdrop-blur-sm">
+      <nav className="flex w-fit flex-wrap items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
       <NavLink
         to="/"
         end
@@ -52,6 +53,7 @@ export default function Nav() {
           Salir
         </button>
       </div>
-    </nav>
+      </nav>
+    </div>
   )
 }

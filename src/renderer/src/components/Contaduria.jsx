@@ -88,30 +88,34 @@ function ContenidoContaduria() {
     let facturacion = 0
     let subtotal = 0
     let interes = 0
+    let descuento = 0
     let ganancia = 0
     let unidades = 0
 
     ventas.forEach((v) => {
+      const descMonto = ((Number(v.total_base) || 0) * (Number(v.descuento_pct) || 0)) / 100
       facturacion += Number(v.total || 0)
       subtotal += Number(v.total_base || 0)
-      interes += Number(v.total || 0) - Number(v.total_base || 0)
+      interes += Number(v.total || 0) - Number(v.total_base || 0) + descMonto
+      descuento += descMonto
       ;(v.detalle ?? []).forEach((d) => {
         unidades += Number(d.cantidad || 0)
         const costo = (Number(d.costo_unitario) || 0) * Number(d.cantidad || 0)
         ganancia += Number(d.subtotal || 0) - costo
       })
+      ganancia -= descMonto
     })
 
     const margen = subtotal > 0 ? (ganancia / subtotal) * 100 : 0
 
-    return { ventas: ventas.length, unidades, facturacion, subtotal, interes, ganancia, margen }
+    return { ventas: ventas.length, unidades, facturacion, subtotal, interes, descuento, ganancia, margen }
   }, [ventas])
 
   return (
     <div className="min-h-screen bg-crema-100">
       <div className="mx-auto max-w-6xl px-4 py-10">
+        <Nav />
         <header className="mb-8">
-          <Nav />
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Contaduría</h1>
             <p className="text-sm text-slate-500">Ventas, facturación y ganancia del período seleccionado</p>
@@ -206,7 +210,7 @@ function ContenidoContaduria() {
             <p className="mt-1 text-xs text-slate-400">
               {loading
                 ? ''
-                : `${fmtPrecio.format(stats.subtotal)} base ${stats.interes < 0 ? '−' : '+'} ${fmtPrecio.format(Math.abs(stats.interes))} interés`}
+                : `${fmtPrecio.format(stats.subtotal)} base${stats.descuento > 0 ? ` − ${fmtPrecio.format(stats.descuento)} descuento` : ''} ${stats.interes < 0 ? '−' : '+'} ${fmtPrecio.format(Math.abs(stats.interes))} interés`}
             </p>
           </div>
 

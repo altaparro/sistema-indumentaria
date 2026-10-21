@@ -25,6 +25,7 @@ function ContenidoVentas() {
   const [busqueda, setBusqueda] = useState('')
   const [tipoFiltro, setTipoFiltro] = useState('')
   const [medioPagoId, setMedioPagoId] = useState('')
+  const [descuento, setDescuento] = useState('0')
   const [loading, setLoading] = useState(true)
   const [procesando, setProcesando] = useState(false)
   const [error, setError] = useState('')
@@ -42,6 +43,7 @@ function ContenidoVentas() {
   const [ventaEditando, setVentaEditando] = useState(null)
   const [editCarrito, setEditCarrito] = useState([])
   const [editMedioPagoId, setEditMedioPagoId] = useState('')
+  const [editDescuento, setEditDescuento] = useState('0')
   const [editClienteId, setEditClienteId] = useState('')
   const [editBusqueda, setEditBusqueda] = useState('')
   const [editProductoId, setEditProductoId] = useState('')
@@ -157,12 +159,14 @@ function ContenidoVentas() {
         body: {
           medio_pago_id: Number(medioPagoId),
           cliente_id: clienteId ? Number(clienteId) : null,
+          descuento_pct: descuentoPct,
           items: carrito.map((i) => ({ producto_id: i.id, cantidad: i.cantidad }))
         }
       })
 
       setCarrito([])
       setClienteId('')
+      setDescuento('0')
       setVentaExitosa(data)
       await obtenerDatos()
     } catch (err) {
@@ -186,6 +190,7 @@ function ContenidoVentas() {
       }))
     )
     setEditMedioPagoId(v.medio_pago_id ? String(v.medio_pago_id) : '')
+    setEditDescuento(String(Number(v.descuento_pct) || 0))
     setEditClienteId(v.cliente_id ? String(v.cliente_id) : '')
     setEditBusqueda('')
     setEditProductoId('')
@@ -196,6 +201,7 @@ function ContenidoVentas() {
     setVentaEditando(null)
     setEditCarrito([])
     setEditMedioPagoId('')
+    setEditDescuento('0')
     setEditClienteId('')
     setEditBusqueda('')
     setEditProductoId('')
@@ -269,7 +275,11 @@ function ContenidoVentas() {
 
   const editMedioSeleccionado = medios.find((m) => String(m.id) === String(editMedioPagoId))
   const editInteresPct = Number(editMedioSeleccionado?.interes || 0)
-  const editTotal = editSubtotal * (1 + editInteresPct / 100)
+  const editDescuentoPct = Math.min(Math.max(Number(editDescuento) || 0, 0), 100)
+  const editMontoDescuento = (editSubtotal * editDescuentoPct) / 100
+  const editBaseDescuento = editSubtotal - editMontoDescuento
+  const editMontoInteres = (editBaseDescuento * editInteresPct) / 100
+  const editTotal = editBaseDescuento + editMontoInteres
 
   async function guardarEdicion() {
     try {
@@ -285,6 +295,7 @@ function ContenidoVentas() {
           venta_id: Number(ventaEditando.id),
           medio_pago_id: Number(editMedioPagoId),
           cliente_id: editClienteId ? Number(editClienteId) : null,
+          descuento_pct: editDescuentoPct,
           items: editCarrito.map((i) => ({ producto_id: i.producto_id, cantidad: i.cantidad }))
         }
       })
@@ -343,8 +354,11 @@ function ContenidoVentas() {
 
   const medioSeleccionado = medios.find((m) => String(m.id) === String(medioPagoId))
   const interesPct = Number(medioSeleccionado?.interes || 0)
-  const montoInteres = (subtotal * interesPct) / 100
-  const total = subtotal + montoInteres
+  const descuentoPct = Math.min(Math.max(Number(descuento) || 0, 0), 100)
+  const montoDescuento = (subtotal * descuentoPct) / 100
+  const baseDescuento = subtotal - montoDescuento
+  const montoInteres = (baseDescuento * interesPct) / 100
+  const total = baseDescuento + montoInteres
 
   const ventasFiltradas = useMemo(() => {
     if (!busquedaVentas.trim()) return ventas
@@ -364,8 +378,8 @@ function ContenidoVentas() {
   return (
     <div className="min-h-screen bg-crema-100">
       <div className="mx-auto max-w-7xl px-4 py-10">
+        <Nav />
         <header className="mb-8">
-          <Nav />
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Nueva venta</h1>
             <p className="text-sm text-slate-500">Seleccioná productos, medio de pago y finalizá la venta</p>
@@ -595,10 +609,37 @@ function ContenidoVentas() {
                 </select>
               </div>
 
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Descuento
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    placeholder="0"
+                    value={descuento}
+                    onChange={(e) => setDescuento(e.target.value)}
+                    className={`${claseInput} pr-9`}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">
+                    %
+                  </span>
+                </div>
+              </div>
+
               <dl className="space-y-1.5 border-t border-slate-200 pt-4 text-sm">
                 <div className="flex justify-between text-slate-600">
                   <dt>Subtotal</dt>
                   <dd className="tabular-nums">{fmtPrecio.format(subtotal)}</dd>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <dt>Descuento {descuentoPct > 0 ? `(${descuentoPct}%)` : ''}</dt>
+                  <dd className={`tabular-nums ${montoDescuento > 0 ? 'font-semibold text-red-600' : ''}`}>
+                    {montoDescuento > 0 ? '−' : ''} {fmtPrecio.format(montoDescuento)}
+                  </dd>
                 </div>
                 <div className="flex justify-between text-slate-600">
                   <dt>Interés {medioSeleccionado ? `(${interesPct}%)` : ''}</dt>
@@ -648,6 +689,7 @@ function ContenidoVentas() {
                   <th className="px-4 py-3">Medio de pago</th>
                   <th className="hidden px-4 py-3 md:table-cell">Cliente</th>
                   <th className="hidden px-4 py-3 text-right sm:table-cell">Subtotal</th>
+                  <th className="hidden px-4 py-3 text-right sm:table-cell">Descuento</th>
                   <th className="hidden px-4 py-3 text-right sm:table-cell">Interés</th>
                   <th className="px-4 py-3 text-right">Total</th>
                 </tr>
@@ -657,7 +699,7 @@ function ContenidoVentas() {
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 7 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <td key={j} className="px-4 py-3">
                           <div className="h-4 animate-pulse rounded bg-slate-200" />
                         </td>
@@ -666,13 +708,13 @@ function ContenidoVentas() {
                   ))
                 ) : ventas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center font-medium text-slate-500">
+                    <td colSpan={8} className="px-4 py-12 text-center font-medium text-slate-500">
                       Todavía no hay ventas registradas.
                     </td>
                   </tr>
                 ) : ventasFiltradas.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
+                    <td colSpan={8} className="px-4 py-12 text-center">
                       <p className="font-medium text-slate-600">No se encontraron ventas con esa búsqueda.</p>
                       <button
                         type="button"
@@ -686,6 +728,8 @@ function ContenidoVentas() {
                 ) : (
                   ventasFiltradas.map((v) => {
                     const abierta = ventaAbierta === v.id
+                    const descMonto =
+                      Math.round(((v.total_base || 0) * (Number(v.descuento_pct) || 0)) / 100 * 100) / 100
                     return (
                       <Fragment key={v.id}>
                         <tr
@@ -713,8 +757,11 @@ function ContenidoVentas() {
                           <td className="hidden px-4 py-3 text-right tabular-nums text-slate-600 sm:table-cell">
                             {fmtPrecio.format(v.total_base || 0)}
                           </td>
+                          <td className="hidden px-4 py-3 text-right tabular-nums text-red-600 sm:table-cell">
+                            {descMonto > 0 ? `− ${fmtPrecio.format(descMonto)}` : '—'}
+                          </td>
                           <td className="hidden px-4 py-3 text-right tabular-nums text-amber-600 sm:table-cell">
-                            {fmtPrecio.format((v.total || 0) - (v.total_base || 0))}
+                            {fmtPrecio.format((v.total || 0) - (v.total_base || 0) + descMonto)}
                           </td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900">
                             {fmtPrecio.format(v.total || 0)}
@@ -723,7 +770,7 @@ function ContenidoVentas() {
 
                         {abierta && (
                           <tr className="bg-slate-50/70">
-                            <td colSpan={7} className="px-4 py-3">
+                            <td colSpan={8} className="px-4 py-3">
                               {v.cliente?.nombre && (
                                 <p className="mb-2 text-sm font-semibold text-slate-800">
                                   Cliente: <span className="font-medium text-stone-800">{v.cliente.nombre}</span>
@@ -751,6 +798,12 @@ function ContenidoVentas() {
                                   </li>
                                 ))}
                               </ul>
+
+                              {descMonto > 0 && (
+                                <p className="mt-2 text-right text-sm font-semibold text-red-600">
+                                  Descuento ({v.descuento_pct}%): −{fmtPrecio.format(descMonto)}
+                                </p>
+                              )}
 
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <button
@@ -1017,7 +1070,7 @@ function ContenidoVentas() {
                 </ul>
               )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Medio de pago
@@ -1051,6 +1104,26 @@ function ContenidoVentas() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Descuento %
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      placeholder="0"
+                      value={editDescuento}
+                      onChange={(e) => setEditDescuento(e.target.value)}
+                      className={`${claseInput} pr-9`}
+                    />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">
+                      %
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1061,8 +1134,14 @@ function ContenidoVentas() {
                   <dd className="tabular-nums">{fmtPrecio.format(editSubtotal)}</dd>
                 </div>
                 <div className="flex justify-between text-slate-600">
+                  <dt>Descuento {editDescuentoPct > 0 ? `(${editDescuentoPct}%)` : ''}</dt>
+                  <dd className={`tabular-nums ${editMontoDescuento > 0 ? 'font-semibold text-red-600' : ''}`}>
+                    {editMontoDescuento > 0 ? '−' : ''} {fmtPrecio.format(editMontoDescuento)}
+                  </dd>
+                </div>
+                <div className="flex justify-between text-slate-600">
                   <dt>Interés {editMedioSeleccionado ? `(${editInteresPct}%)` : ''}</dt>
-                  <dd className="tabular-nums">{fmtPrecio.format(editTotal - editSubtotal)}</dd>
+                  <dd className="tabular-nums">{fmtPrecio.format(editMontoInteres)}</dd>
                 </div>
                 <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-bold text-slate-900">
                   <dt>Total</dt>
