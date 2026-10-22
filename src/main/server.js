@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { hashPassword, verifyPassword } from './db.js'
 import { crearSincronizador } from './metaCatalog.js'
+import { generarBackup } from './backup.js'
 
 const SESIONES = new Map()
 const DURACION_SESION_MS = 12 * 60 * 60 * 1000
@@ -235,7 +236,7 @@ function listarVentas(db, { desde, hasta, limite = 200 } = {}) {
 
 // ---------- App ----------
 
-export function createServer({ db, staticDir, imagenesDir }) {
+export function createServer({ db, staticDir, imagenesDir, escritorioDir }) {
   const app = express()
   const dirImagenes = imagenesDir || path.join(os.tmpdir(), 'sistema-indumentaria-imagenes')
   fs.mkdirSync(dirImagenes, { recursive: true })
@@ -743,6 +744,18 @@ export function createServer({ db, staticDir, imagenesDir }) {
     const upsert = db.prepare('INSERT INTO settings (clave, valor) VALUES (?, ?) ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor')
     Object.entries(b).forEach(([clave, valor]) => upsert.run(clave, String(valor ?? '')))
     res.json({ ok: true })
+  })
+
+  // Copia de seguridad (.sql + Excel) en el escritorio
+  app.post('/api/backup', requerido, (_req, res) => {
+    try {
+      const destino = escritorioDir || path.join(os.homedir(), 'Desktop')
+      const resultado = generarBackup({ db, destino })
+      res.json({ ok: true, ...resultado })
+    } catch (err) {
+      console.error('[backup]', err)
+      res.status(500).json({ error: 'No se pudo generar el backup: ' + err.message })
+    }
   })
 
   app.get('/api/health', (_req, res) => {

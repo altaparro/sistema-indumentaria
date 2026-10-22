@@ -38,6 +38,24 @@ function ContenidoConfiguracion() {
   const [mensajeWa, setMensajeWa] = useState('')
   const [errorWa, setErrorWa] = useState('')
 
+  const [generandoBackup, setGenerandoBackup] = useState(false)
+  const [resultadoBackup, setResultadoBackup] = useState(null)
+  const [errorBackup, setErrorBackup] = useState('')
+
+  async function generarBackupAhora() {
+    setErrorBackup('')
+    setResultadoBackup(null)
+    try {
+      setGenerandoBackup(true)
+      const data = await apiFetch('/api/backup', { method: 'POST' })
+      setResultadoBackup(data)
+    } catch (err) {
+      setErrorBackup(err.message)
+    } finally {
+      setGenerandoBackup(false)
+    }
+  }
+
   async function obtenerUsuarios() {
     try {
       const data = await apiFetch('/api/usuarios')
@@ -582,6 +600,42 @@ function ContenidoConfiguracion() {
               </div>
             </div>
           </div>
+        </section>
+
+        <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-1 text-sm font-bold uppercase tracking-wide text-slate-700">
+            Copia de seguridad
+          </h2>
+          <p className="mb-5 text-sm text-slate-500">
+            Genera dos archivos en el Escritorio: un <span className="font-mono">.sql</span> con
+            todo el esquema y los datos (se restaura con DB Browser for SQLite o el comando
+            <span className="font-mono"> sqlite3</span>) y un Excel con una hoja por tabla para
+            consultar o recuperar la información a mano.
+          </p>
+
+          {errorBackup && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {errorBackup}
+            </div>
+          )}
+          {resultadoBackup && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <p className="mb-1 font-semibold">
+                Backup generado ({resultadoBackup.tablas} tablas, {resultadoBackup.filas} filas):
+              </p>
+              <p className="font-mono text-xs break-all">{resultadoBackup.rutaSql}</p>
+              <p className="font-mono text-xs break-all">{resultadoBackup.rutaExcel}</p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={generarBackupAhora}
+            disabled={generandoBackup}
+            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-stone-800 disabled:opacity-50"
+          >
+            {generandoBackup ? 'Generando...' : 'Generar backup en el Escritorio'}
+          </button>
         </section>
       </div>
     </div>

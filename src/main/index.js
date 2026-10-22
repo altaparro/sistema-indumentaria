@@ -21,7 +21,12 @@ async function iniciarServidor() {
   const staticDir = path.join(__dirname, '../renderer')
   const imagenesDir = path.join(userData, 'imagenes')
   fs.mkdirSync(imagenesDir, { recursive: true })
-  const server = createServer({ db, staticDir, imagenesDir })
+  const server = createServer({
+    db,
+    staticDir,
+    imagenesDir,
+    escritorioDir: app.getPath('desktop')
+  })
 
   const baseUrl = await new Promise((resolve, reject) => {
     const srv = server.listen(0, '127.0.0.1', () => {
